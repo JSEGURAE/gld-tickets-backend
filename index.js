@@ -18,20 +18,7 @@ const app = express()
 const PORT = process.env.PORT || 3001
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
-const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  process.env.APP_URL,
-].filter(Boolean)
-
-app.use(cors({
-  origin: (origin, cb) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
-    cb(new Error('Not allowed by CORS'))
-  },
-  credentials: true,
-}))
+app.use(cors({ origin: true, credentials: true }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
