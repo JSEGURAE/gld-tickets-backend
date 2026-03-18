@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client')
-const nodemailer = require('nodemailer')
+const https = require('https')
 
 const prisma = new PrismaClient()
 
@@ -12,22 +12,48 @@ const PRIORITY_STYLES = {
   CRITICAL: 'background:#ffe4e6;color:#be123c;padding:2px 10px;border-radius:20px;font-size:13px;font-weight:700',
 }
 
-// ─── Brevo SMTP ───────────────────────────────────────────────────────────────
+// ─── Brevo API HTTP ───────────────────────────────────────────────────────────
 
-function getTransporter() {
-  if (!process.env.BREVO_API_KEY) return null
-  return nodemailer.createTransport({
-    host: 'smtp-relay.brevo.com',
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.BREVO_SMTP_USER,
-      pass: process.env.BREVO_API_KEY,
-    },
+async function brevoSend(to, subject, html) {
+  const apiKey = process.env.BREVO_API_KEY
+  if (!apiKey) { console.log('⚠️  Brevo no configurado.'); return }
+
+  const toList = Array.isArray(to) ? to : [to]
+  const body = JSON.stringify({
+    sender: { name: 'GLD Service Portal', email: process.env.BREVO_SMTP_USER || 'a55e86001@smtp-brevo.com' },
+    to: toList.map(email => ({ email })),
+    subject,
+    htmlContent: html,
+  })
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'api.brevo.com',
+      path: '/v3/smtp/email',
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log(`📧 Email enviado a: ${toList.join(', ')}`)
+        } else {
+          console.error(`❌ Brevo error ${res.statusCode}:`, data)
+        }
+        resolve()
+      })
+    })
+    req.on('error', err => { console.error('❌ Brevo request error:', err.message); resolve() })
+    req.write(body)
+    req.end()
   })
 }
 
-const FROM_EMAIL = `GLD Service Portal <${process.env.BREVO_SMTP_USER || 'noreply@gld.com'}>`
 
 function buildTicketHtml(ticket, requestorName) {
   const appUrl = process.env.APP_URL || 'http://localhost:5173'
@@ -82,23 +108,9 @@ function buildTicketHtml(ticket, requestorName) {
 }
 
 async function sendEmails(ticket, requestorName, recipients) {
-  const transporter = getTransporter()
-  if (!transporter) { console.log('⚠️  Brevo no configurado.'); return }
-
   const toList = recipients.filter(r => r.type === 'email' && r.active).map(r => r.value)
   if (!toList.length) return
-
-  try {
-    await transporter.sendMail({
-      from: FROM_EMAIL,
-      to: toList.join(', '),
-      subject: `[Ticket #${ticket.id}] ${ticket.title}`,
-      html: buildTicketHtml(ticket, requestorName),
-    })
-    console.log(`📧 Email enviado a: ${toList.join(', ')}`)
-  } catch (err) {
-    console.error('❌ Error enviando email:', err.message)
-  }
+  await brevoSend(toList, `[Ticket #${ticket.id}] ${ticket.title}`, buildTicketHtml(ticket, requestorName))
 }
 
 async function sendSMS(ticket, requestorName, recipients) {
@@ -190,12 +202,8 @@ async function sendPasswordResetEmail(user, token) {
   </div>
 </body></html>`
 
-  try {
-    await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: `[GLD] Recuperación de contraseña — ${user.name}`, html })
-    console.log(`🔑 Enlace de recuperación enviado a: ${user.email}`)
-  } catch (err) {
-    console.error('❌ Error enviando email de recuperación:', err.message)
-  }
+  await brevoSend(user.email, `[GLD] Recuperación de contraseña — ${user.name}`, html)
+  console.log(`🔑 Enlace de recuperación enviado a: ${user.email}`)
 }
 
 // ─── Notificaciones directas al creador del ticket ───────────────────────────
@@ -206,9 +214,7 @@ const STATUS_BG      = { NEW: '#f1f5f9', IN_REVIEW: '#fef3c7', IN_PROGRESS: '#e0
 const FIELD_LABELS   = { status: 'Estado', priority: 'Prioridad', assignee: 'Técnico asignado', title: 'Título', description: 'Descripción', category: 'Categoría', subCategory: 'Sub-categoría' }
 
 function sendToCreator(to, subject, html) {
-  const transporter = getTransporter()
-  if (!transporter) return
-  transporter.sendMail({ from: FROM_EMAIL, to, subject, html })
+  brevoSend(to, subject, html)
     .then(() => console.log(`📧 Notif. creador → ${to}`))
     .catch(err => console.error('❌ Error notif. creador:', err.message))
 }
