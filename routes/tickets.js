@@ -5,6 +5,7 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary')
 const { PrismaClient } = require('@prisma/client')
 const { authenticate, requireRole } = require('../middleware/auth')
 const { notifyNewTicket, notifyTicketCreatedToRequestor, notifyTicketUpdatedToRequestor, notifyTicketAssignedToTechnician } = require('../services/notifications')
+const { notifyTechnicians } = require('./push')
 
 const prisma = new PrismaClient()
 
@@ -196,9 +197,14 @@ router.post('/', authenticate, upload.single('image'), async (req, res) => {
       data: { ticketId: ticket.id, userId: req.user.id, field: 'created', oldValue: null, newValue: 'Ticket creado' },
     })
 
-    // Notificaciones: admin-recipients + creador
+    // Notificaciones: admin-recipients + creador + push
     notifyNewTicket(ticket, req.user.name)
     notifyTicketCreatedToRequestor(ticket, req.user.email)
+    notifyTechnicians({
+      title: `🎫 Nuevo Ticket #${ticket.id}`,
+      body: `${ticket.title} — ${req.user.name}`,
+      url: `/tickets/${ticket.id}`,
+    })
 
     res.status(201).json(ticket)
   } catch (error) {

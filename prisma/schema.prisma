@@ -53,6 +53,7 @@ model User {
   comments           Comment[]
   history            History[]
   supervisorMentions TicketSupervisor[] @relation("SupervisorMentions")
+  pushSubscriptions  PushSubscription[]
 
   @@map("usr_users")
 }
@@ -156,6 +157,19 @@ model Comment {
   user   User   @relation(fields: [userId], references: [id])
 
   @@map("tkt_comments")
+}
+
+model PushSubscription {
+  id       Int    @id @default(autoincrement())
+  userId   Int
+  endpoint String @db.Text
+  p256dh   String @db.Text
+  auth     String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint(length: 255)])
+  @@map("ntf_push_subscriptions")
 }
 
 model History {

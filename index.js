@@ -13,6 +13,7 @@ const statsRoutes         = require('./routes/stats')
 const notificationRoutes  = require('./routes/notifications')
 const roleRoutes          = require('./routes/roles')
 const sedeRoutes          = require('./routes/sedes')
+const { router: pushRoutes } = require('./routes/push')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -32,6 +33,7 @@ app.use('/api/stats',         statsRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/roles',         roleRoutes)
 app.use('/api/sedes',         sedeRoutes)
+app.use('/api/push',          pushRoutes)
 
 // ─── Static files ──────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))

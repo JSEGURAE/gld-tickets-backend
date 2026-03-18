@@ -24,7 +24,8 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^6.9.9",
     "resend": "^6.9.4",
-    "twilio": "^5.12.2"
+    "twilio": "^5.12.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "prisma": "^5.10.2"
