@@ -77,9 +77,11 @@ router.get('/', authenticate, async (req, res) => {
     if (priority && VALID_PRIORITIES.includes(priority)) where.priority = priority
     if (assigneeId) where.assigneeId = parseInt(assigneeId)
     if (search) {
+      const numericId = parseInt(search.replace('#', ''))
       where.OR = [
         { title: { contains: search } },
         { description: { contains: search } },
+        ...(isNaN(numericId) ? [] : [{ id: numericId }]),
       ]
     }
 
