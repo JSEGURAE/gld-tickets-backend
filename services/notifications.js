@@ -20,7 +20,7 @@ async function brevoSend(to, subject, html) {
 
   const toList = Array.isArray(to) ? to : [to]
   const body = JSON.stringify({
-    sender: { name: 'GLD Service Portal', email: process.env.BREVO_SMTP_USER || 'a55e86001@smtp-brevo.com' },
+    sender: { name: 'GLD Service Portal', email: process.env.BREVO_SENDER_EMAIL || 'js.chatjpt@gmail.com' },
     to: toList.map(email => ({ email })),
     subject,
     htmlContent: html,
@@ -174,8 +174,7 @@ async function notifyNewTicket(ticket, requestorName) {
 // ─── Email de recuperación (mantiene compatibilidad) ──────────────────────────
 
 async function sendPasswordResetEmail(user, token) {
-  const transporter = getTransporter()
-  if (!transporter) { console.log('⚠️  Brevo no configurado.'); return }
+  if (!process.env.BREVO_API_KEY) { console.log('⚠️  Brevo no configurado.'); return }
 
   const appUrl    = process.env.APP_URL || 'http://localhost:5173'
   const resetUrl  = `${appUrl}/reset-password?token=${token}`
