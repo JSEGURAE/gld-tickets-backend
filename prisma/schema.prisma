@@ -60,7 +60,7 @@ model User {
 model Ticket {
   id             Int      @id @default(autoincrement())
   title          String
-  description    String
+  description    String   @db.Text
   priority       String   @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
   status         String   @default("NEW")    // NEW | IN_REVIEW | IN_PROGRESS | IN_TESTING | COMPLETED
   requestorId    Int
@@ -145,7 +145,7 @@ model NotificationRecipient {
 
 model Comment {
   id        Int      @id @default(autoincrement())
-  content   String
+  content   String   @db.Text
   ticketId  Int
   userId    Int
   createdAt DateTime @default(now())
