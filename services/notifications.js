@@ -57,51 +57,78 @@ async function brevoSend(to, subject, html) {
 
 function buildTicketHtml(ticket, requestorName) {
   const appUrl = process.env.APP_URL || 'http://localhost:5173'
-  const priorityStyle = PRIORITY_STYLES[ticket.priority] || PRIORITY_STYLES.MEDIUM
   const priorityLabel = PRIORITY_LABELS[ticket.priority] || ticket.priority
+  const priorityEmoji = PRIORITY_EMOJI[ticket.priority] || '🎫'
+  const priorityColors = {
+    LOW:      { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
+    MEDIUM:   { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+    HIGH:     { bg: '#fff7ed', color: '#c2410c', border: '#fed7aa' },
+    CRITICAL: { bg: '#fff1f2', color: '#be123c', border: '#fecdd3' },
+  }
+  const pc = priorityColors[ticket.priority] || priorityColors.MEDIUM
+  const date = new Date().toLocaleDateString('es-CR', { day: '2-digit', month: 'long', year: 'numeric' })
 
   return `<!DOCTYPE html>
 <html lang="es">
-<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width" /></head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif">
-  <div style="max-width:580px;margin:32px auto;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)">
-    <div style="background:linear-gradient(135deg,#6d28d9 0%,#4f46e5 100%);padding:28px 32px;text-align:center">
-      <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:rgba(255,255,255,0.15);border-radius:14px;margin-bottom:14px;font-size:24px">🎫</div>
-      <h1 style="color:white;margin:0;font-size:20px;font-weight:700;letter-spacing:-0.02em">Nuevo Ticket de Soporte</h1>
-      <p style="color:#c4b5fd;margin:6px 0 0;font-size:13px;font-weight:500">GLD Service Portal</p>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#0f0f1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:600px;margin:0 auto;padding:32px 16px">
+
+    <!-- Logo / Brand -->
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#4f46e5);padding:10px 22px;border-radius:30px">
+        <span style="color:white;font-size:13px;font-weight:700;letter-spacing:0.05em">GLD SERVICE PORTAL</span>
+      </div>
     </div>
-    <div style="background:white;padding:28px 32px">
-      <div style="display:inline-block;background:#ede9fe;color:#7c3aed;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;margin-bottom:22px">#${ticket.id}</div>
-      <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid #f3f4f6">
-        <p style="margin:0 0 5px;color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase">Título</p>
-        <p style="margin:0;color:#111827;font-size:17px;font-weight:600">${ticket.title}</p>
-      </div>
-      <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid #f3f4f6">
-        <p style="margin:0 0 5px;color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase">Descripción</p>
-        <p style="margin:0;color:#374151;font-size:14px;line-height:1.65">${ticket.description}</p>
-      </div>
-      <div style="display:flex;gap:24px;margin-bottom:26px">
-        <div style="flex:1">
-          <p style="margin:0 0 6px;color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase">Prioridad</p>
-          <span style="${priorityStyle}">${priorityLabel}</span>
-        </div>
-        <div style="flex:1">
-          <p style="margin:0 0 6px;color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase">Solicitante</p>
-          <p style="margin:0;color:#374151;font-size:14px;font-weight:600">${requestorName}</p>
-        </div>
-        <div style="flex:1">
-          <p style="margin:0 0 6px;color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase">Fecha</p>
-          <p style="margin:0;color:#374151;font-size:14px">${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+
+    <!-- Card -->
+    <div style="background:#1e1e2e;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.08)">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#4c1d95 0%,#312e81 100%);padding:32px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;background:rgba(255,255,255,0.04);border-radius:50%"></div>
+        <div style="position:absolute;bottom:-30px;left:20px;width:80px;height:80px;background:rgba(255,255,255,0.03);border-radius:50%"></div>
+        <div style="position:relative">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);padding:4px 14px;border-radius:20px;margin-bottom:14px">
+            <span style="color:#e9d5ff;font-size:12px;font-weight:600">NUEVO TICKET #${ticket.id}</span>
+          </div>
+          <h1 style="color:white;margin:0 0 8px;font-size:22px;font-weight:700;line-height:1.3">${ticket.title}</h1>
+          <p style="color:#c4b5fd;margin:0;font-size:13px">Solicitado por <strong style="color:white">${requestorName}</strong> · ${date}</p>
         </div>
       </div>
-      <a href="${appUrl}/tickets/${ticket.id}"
-         style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;padding:13px 26px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">
-        Ver Ticket →
-      </a>
+
+      <!-- Body -->
+      <div style="padding:28px 32px">
+
+        <!-- Priority badge -->
+        <div style="margin-bottom:24px">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:${pc.bg};border:1px solid ${pc.border};color:${pc.color};padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600">
+            ${priorityEmoji} Prioridad ${priorityLabel}
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div style="background:#16162a;border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:20px;margin-bottom:28px">
+          <p style="margin:0 0 8px;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">Descripción</p>
+          <p style="margin:0;color:#d1d5db;font-size:14px;line-height:1.7">${ticket.description}</p>
+        </div>
+
+        <!-- CTA Button -->
+        <div style="text-align:center">
+          <a href="${appUrl}/tickets/${ticket.id}"
+             style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;letter-spacing:0.01em">
+            Ver ticket completo →
+          </a>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div style="border-top:1px solid rgba(255,255,255,0.06);padding:16px 32px;text-align:center">
+        <p style="margin:0;color:#4b5563;font-size:11px">GLD Service Portal · Notificación automática · No responder este correo</p>
+      </div>
     </div>
-    <div style="background:#f8fafc;padding:14px 32px;border-top:1px solid #e2e8f0;text-align:center">
-      <p style="margin:0;color:#94a3b8;font-size:11px">GLD Service Portal — Notificación automática del sistema</p>
-    </div>
+
   </div>
 </body>
 </html>`
