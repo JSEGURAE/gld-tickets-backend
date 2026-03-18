@@ -1,22 +1,26 @@
 const router = require('express').Router()
-const path = require('path')
-const fs = require('fs')
 const multer = require('multer')
+const { v2: cloudinary } = require('cloudinary')
+const { CloudinaryStorage } = require('multer-storage-cloudinary')
 const { PrismaClient } = require('@prisma/client')
 const { authenticate, requireRole } = require('../middleware/auth')
 const { notifyNewTicket, notifyTicketCreatedToRequestor, notifyTicketUpdatedToRequestor, notifyCommentToRequestor } = require('../services/notifications')
 
 const prisma = new PrismaClient()
 
-// ─── File upload config ────────────────────────────────────────────────────────
-const uploadsDir = path.join(__dirname, '../uploads')
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+// ─── Cloudinary config ─────────────────────────────────────────────────────────
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
 
-const storage = multer.diskStorage({
-  destination: uploadsDir,
-  filename: (req, file, cb) => {
-    const unique = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    cb(null, unique + path.extname(file.originalname).toLowerCase())
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'gld-tickets',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
   },
 })
 
@@ -155,16 +159,14 @@ router.post('/', authenticate, upload.single('image'), async (req, res) => {
   const { title, description, priority = 'MEDIUM' } = req.body
 
   if (!title || !description) {
-    if (req.file) fs.unlinkSync(req.file.path)
     return res.status(400).json({ error: 'Título y descripción son requeridos' })
   }
   if (!VALID_PRIORITIES.includes(priority)) {
-    if (req.file) fs.unlinkSync(req.file.path)
     return res.status(400).json({ error: 'Prioridad inválida' })
   }
 
   try {
-    const attachmentUrl = req.file ? `/uploads/${req.file.filename}` : null
+    const attachmentUrl  = req.file ? req.file.path : null      // Cloudinary URL
     const attachmentName = req.file ? req.file.originalname : null
 
     const ticket = await prisma.ticket.create({
@@ -190,7 +192,6 @@ router.post('/', authenticate, upload.single('image'), async (req, res) => {
 
     res.status(201).json(ticket)
   } catch (error) {
-    if (req.file) fs.unlinkSync(req.file.path).catch(() => {})
     console.error('Create ticket error:', error)
     res.status(500).json({ error: 'Error al crear el ticket' })
   }
@@ -364,10 +365,10 @@ router.delete('/:id', authenticate, requireRole('ADMIN'), async (req, res) => {
     const existing = await prisma.ticket.findUnique({ where: { id: ticketId } })
     if (!existing) return res.status(404).json({ error: 'Ticket no encontrado' })
 
-    // Delete attachment file if exists
-    if (existing.attachmentUrl) {
-      const filePath = path.join(__dirname, '..', existing.attachmentUrl)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    // Delete attachment from Cloudinary if exists
+    if (existing.attachmentUrl && existing.attachmentUrl.includes('cloudinary')) {
+      const publicId = existing.attachmentUrl.split('/').slice(-2).join('/').split('.')[0]
+      cloudinary.uploader.destroy(publicId).catch(() => {})
     }
 
     await prisma.ticket.delete({ where: { id: ticketId } })
