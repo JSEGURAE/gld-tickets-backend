@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client')
-const nodemailer = require('nodemailer')
+const { Resend } = require('resend')
 
 const prisma = new PrismaClient()
 
@@ -12,18 +12,14 @@ const PRIORITY_STYLES = {
   CRITICAL: 'background:#ffe4e6;color:#be123c;padding:2px 10px;border-radius:20px;font-size:13px;font-weight:700',
 }
 
-// ─── Email ────────────────────────────────────────────────────────────────────
+// ─── Resend ───────────────────────────────────────────────────────────────────
 
-function createTransporter() {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || process.env.SMTP_PASS === 'TU_CONTRASENA_AQUI') return null
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    tls: { rejectUnauthorized: false },
-  })
+function getResend() {
+  if (!process.env.RESEND_API_KEY) return null
+  return new Resend(process.env.RESEND_API_KEY)
 }
+
+const FROM_EMAIL = 'onboarding@resend.dev'
 
 function buildTicketHtml(ticket, requestorName) {
   const appUrl = process.env.APP_URL || 'http://localhost:5173'
@@ -78,18 +74,16 @@ function buildTicketHtml(ticket, requestorName) {
 }
 
 async function sendEmails(ticket, requestorName, recipients) {
-  const transporter = createTransporter()
-  if (!transporter) {
-    console.log('⚠️  Email: SMTP no configurado.')
-    return
-  }
+  const resend = getResend()
+  if (!resend) { console.log('⚠️  Resend no configurado.'); return }
+
   const toList = recipients.filter(r => r.type === 'email' && r.active).map(r => r.value)
   if (!toList.length) return
 
   try {
-    await transporter.sendMail({
-      from: `"GLD Service Portal" <${process.env.SMTP_USER}>`,
-      to: toList.join(', '),
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toList,
       subject: `[Ticket #${ticket.id}] ${ticket.title}`,
       html: buildTicketHtml(ticket, requestorName),
     })
@@ -160,19 +154,13 @@ async function notifyNewTicket(ticket, requestorName) {
 // ─── Email de recuperación (mantiene compatibilidad) ──────────────────────────
 
 async function sendPasswordResetEmail(user, token) {
-  const transporter = createTransporter()
-  if (!transporter) {
-    console.log('⚠️  Email: SMTP no configurado. No se pudo enviar el correo de recuperación.')
-    return
-  }
+  const resend = getResend()
+  if (!resend) { console.log('⚠️  Resend no configurado.'); return }
 
-  const appUrl = process.env.APP_URL || 'http://localhost:5173'
-  const resetUrl = `${appUrl}/reset-password?token=${token}`
-  const adminEmail = process.env.NOTIFY_EMAILS?.split(',')[0]?.trim() || process.env.SMTP_USER
+  const appUrl    = process.env.APP_URL || 'http://localhost:5173'
+  const resetUrl  = `${appUrl}/reset-password?token=${token}`
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8" /></head>
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,-apple-system,sans-serif">
   <div style="max-width:540px;margin:32px auto;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)">
     <div style="background:linear-gradient(135deg,#6d28d9 0%,#4f46e5 100%);padding:28px 32px;text-align:center">
@@ -192,17 +180,11 @@ async function sendPasswordResetEmail(user, token) {
       <p style="color:#9ca3af;font-size:12px;margin:20px 0 0">Este enlace expira en 1 hora.</p>
     </div>
   </div>
-</body>
-</html>`
+</body></html>`
 
   try {
-    await transporter.sendMail({
-      from: `"GLD Service Portal" <${process.env.SMTP_USER}>`,
-      to: adminEmail,
-      subject: `[GLD] Recuperación de contraseña — ${user.name}`,
-      html,
-    })
-    console.log(`🔑 Enlace de recuperación enviado a: ${adminEmail}`)
+    await resend.emails.send({ from: FROM_EMAIL, to: user.email, subject: `[GLD] Recuperación de contraseña — ${user.name}`, html })
+    console.log(`🔑 Enlace de recuperación enviado a: ${user.email}`)
   } catch (err) {
     console.error('❌ Error enviando email de recuperación:', err.message)
   }
@@ -216,14 +198,10 @@ const STATUS_BG      = { NEW: '#f1f5f9', IN_REVIEW: '#fef3c7', IN_PROGRESS: '#e0
 const FIELD_LABELS   = { status: 'Estado', priority: 'Prioridad', assignee: 'Técnico asignado', title: 'Título', description: 'Descripción', category: 'Categoría', subCategory: 'Sub-categoría' }
 
 function sendToCreator(to, subject, html) {
-  const transporter = createTransporter()
-  if (!transporter) return
-  transporter.sendMail({
-    from: `"GLD Service Portal" <${process.env.SMTP_USER}>`,
-    to,
-    subject,
-    html,
-  }).then(() => console.log(`📧 Notif. creador → ${to}`))
+  const resend = getResend()
+  if (!resend) return
+  resend.emails.send({ from: FROM_EMAIL, to, subject, html })
+    .then(() => console.log(`📧 Notif. creador → ${to}`))
     .catch(err => console.error('❌ Error notif. creador:', err.message))
 }
 
