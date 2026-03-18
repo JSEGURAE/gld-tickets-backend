@@ -15,22 +15,30 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
+const ALLOWED_MIMES = [
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
+
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: (req, file) => ({
     folder: 'gld-tickets',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
-  },
+    resource_type: file.mimetype.startsWith('image/') ? 'image' : 'raw',
+    public_id: `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`,
+  }),
 })
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    if (allowed.includes(file.mimetype)) cb(null, true)
-    else cb(new Error('Solo se permiten imágenes (JPG, PNG, GIF, WebP)'))
+    if (ALLOWED_MIMES.includes(file.mimetype)) cb(null, true)
+    else cb(new Error('Tipo de archivo no permitido. Use imágenes, PDF, Excel o Word.'))
   },
 })
 
