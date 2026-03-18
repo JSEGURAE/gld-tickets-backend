@@ -1,7 +1,7 @@
 const router = require('express').Router()
 const { PrismaClient } = require('@prisma/client')
 const { authenticate } = require('../middleware/auth')
-const { notifyCommentToRequestor } = require('../services/notifications')
+const { notifyCommentToRequestor, notifyCommentToTechnician } = require('../services/notifications')
 
 const prisma = new PrismaClient()
 
@@ -17,7 +17,10 @@ router.post('/:id/comments', authenticate, async (req, res) => {
   try {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { requestor: { select: { id: true, email: true } } },
+      include: {
+        requestor: { select: { id: true, email: true } },
+        assignee:  { select: { id: true, email: true } },
+      },
     })
     if (!ticket) return res.status(404).json({ error: 'Ticket no encontrado' })
 
@@ -51,6 +54,11 @@ router.post('/:id/comments', authenticate, async (req, res) => {
     // Notificar al creador si el comentario lo hace otra persona
     if (ticket.requestorId !== req.user.id && ticket.requestor?.email) {
       notifyCommentToRequestor(ticket, ticket.requestor.email, content.trim(), req.user.name)
+    }
+
+    // Notificar al técnico asignado si el comentario lo hace alguien distinto
+    if (ticket.assigneeId && ticket.assigneeId !== req.user.id && ticket.assignee?.email) {
+      notifyCommentToTechnician(ticket, ticket.assignee.email, content.trim(), req.user.name)
     }
 
     res.status(201).json(comment)

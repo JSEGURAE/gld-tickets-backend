@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client')
-const { Resend } = require('resend')
+const nodemailer = require('nodemailer')
 
 const prisma = new PrismaClient()
 
@@ -12,14 +12,22 @@ const PRIORITY_STYLES = {
   CRITICAL: 'background:#ffe4e6;color:#be123c;padding:2px 10px;border-radius:20px;font-size:13px;font-weight:700',
 }
 
-// ─── Resend ───────────────────────────────────────────────────────────────────
+// ─── Brevo SMTP ───────────────────────────────────────────────────────────────
 
-function getResend() {
-  if (!process.env.RESEND_API_KEY) return null
-  return new Resend(process.env.RESEND_API_KEY)
+function getTransporter() {
+  if (!process.env.BREVO_API_KEY) return null
+  return nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.BREVO_SMTP_USER,
+      pass: process.env.BREVO_API_KEY,
+    },
+  })
 }
 
-const FROM_EMAIL = 'onboarding@resend.dev'
+const FROM_EMAIL = `GLD Service Portal <${process.env.BREVO_SMTP_USER || 'noreply@gld.com'}>`
 
 function buildTicketHtml(ticket, requestorName) {
   const appUrl = process.env.APP_URL || 'http://localhost:5173'
@@ -74,16 +82,16 @@ function buildTicketHtml(ticket, requestorName) {
 }
 
 async function sendEmails(ticket, requestorName, recipients) {
-  const resend = getResend()
-  if (!resend) { console.log('⚠️  Resend no configurado.'); return }
+  const transporter = getTransporter()
+  if (!transporter) { console.log('⚠️  Brevo no configurado.'); return }
 
   const toList = recipients.filter(r => r.type === 'email' && r.active).map(r => r.value)
   if (!toList.length) return
 
   try {
-    await resend.emails.send({
+    await transporter.sendMail({
       from: FROM_EMAIL,
-      to: toList,
+      to: toList.join(', '),
       subject: `[Ticket #${ticket.id}] ${ticket.title}`,
       html: buildTicketHtml(ticket, requestorName),
     })
@@ -154,8 +162,8 @@ async function notifyNewTicket(ticket, requestorName) {
 // ─── Email de recuperación (mantiene compatibilidad) ──────────────────────────
 
 async function sendPasswordResetEmail(user, token) {
-  const resend = getResend()
-  if (!resend) { console.log('⚠️  Resend no configurado.'); return }
+  const transporter = getTransporter()
+  if (!transporter) { console.log('⚠️  Brevo no configurado.'); return }
 
   const appUrl    = process.env.APP_URL || 'http://localhost:5173'
   const resetUrl  = `${appUrl}/reset-password?token=${token}`
@@ -183,7 +191,7 @@ async function sendPasswordResetEmail(user, token) {
 </body></html>`
 
   try {
-    await resend.emails.send({ from: FROM_EMAIL, to: user.email, subject: `[GLD] Recuperación de contraseña — ${user.name}`, html })
+    await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: `[GLD] Recuperación de contraseña — ${user.name}`, html })
     console.log(`🔑 Enlace de recuperación enviado a: ${user.email}`)
   } catch (err) {
     console.error('❌ Error enviando email de recuperación:', err.message)
@@ -198,9 +206,9 @@ const STATUS_BG      = { NEW: '#f1f5f9', IN_REVIEW: '#fef3c7', IN_PROGRESS: '#e0
 const FIELD_LABELS   = { status: 'Estado', priority: 'Prioridad', assignee: 'Técnico asignado', title: 'Título', description: 'Descripción', category: 'Categoría', subCategory: 'Sub-categoría' }
 
 function sendToCreator(to, subject, html) {
-  const resend = getResend()
-  if (!resend) return
-  resend.emails.send({ from: FROM_EMAIL, to, subject, html })
+  const transporter = getTransporter()
+  if (!transporter) return
+  transporter.sendMail({ from: FROM_EMAIL, to, subject, html })
     .then(() => console.log(`📧 Notif. creador → ${to}`))
     .catch(err => console.error('❌ Error notif. creador:', err.message))
 }
@@ -335,10 +343,54 @@ async function notifyCommentToRequestor(ticket, requestorEmail, comment, authorN
   sendToCreator(requestorEmail, `[Ticket #${ticket.id}] Nuevo comentario — ${ticket.title}`, html)
 }
 
+// 4. Nuevo comentario → al técnico asignado
+async function notifyCommentToTechnician(ticket, techEmail, comment, authorName) {
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/></head>
+  <body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,-apple-system,sans-serif">
+  <div style="max-width:580px;margin:32px auto;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.1)">
+    ${headerHtml('💬', 'Nuevo comentario en ticket asignado', 'GLD Service Portal')}
+    <div style="background:white;padding:28px 32px">
+      <p style="color:#374151;font-size:14px;margin:0 0 20px">Hay un nuevo comentario en un ticket que tienes asignado.</p>
+      ${ticketMetaHtml(ticket)}
+      <div style="margin-top:22px;background:#eff6ff;border-left:4px solid #3b82f6;border-radius:0 10px 10px 0;padding:16px 18px">
+        <p style="margin:0 0 8px;color:#1d4ed8;font-size:12px;font-weight:700">${authorName} comentó:</p>
+        <p style="margin:0;color:#374151;font-size:14px;line-height:1.65">${comment}</p>
+      </div>
+    </div>
+    ${footerHtml()}
+  </div></body></html>`
+
+  sendToCreator(techEmail, `[Ticket #${ticket.id}] Nuevo comentario — ${ticket.title}`, html)
+}
+
+// 5. Ticket asignado → al técnico asignado
+async function notifyTicketAssignedToTechnician(ticket, techEmail, assignerName) {
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/></head>
+  <body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,-apple-system,sans-serif">
+  <div style="max-width:580px;margin:32px auto;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.1)">
+    ${headerHtml('🔧', 'Ticket asignado a ti', 'GLD Service Portal')}
+    <div style="background:white;padding:28px 32px">
+      <p style="color:#374151;font-size:14px;margin:0 0 20px">
+        <strong>${assignerName}</strong> te asignó el siguiente ticket. Por favor revísalo y comienza a trabajar en él.
+      </p>
+      ${ticketMetaHtml(ticket)}
+      ${ticket.description ? `<div style="margin-top:20px;padding-top:20px;border-top:1px solid #f3f4f6">
+        <p style="margin:0 0 6px;color:#9ca3af;font-size:11px;font-weight:700;text-transform:uppercase">Descripción</p>
+        <p style="margin:0;color:#374151;font-size:14px;line-height:1.65">${ticket.description}</p>
+      </div>` : ''}
+    </div>
+    ${footerHtml()}
+  </div></body></html>`
+
+  sendToCreator(techEmail, `[Ticket #${ticket.id}] Ticket asignado a ti — ${ticket.title}`, html)
+}
+
 module.exports = {
   notifyNewTicket,
   sendPasswordResetEmail,
   notifyTicketCreatedToRequestor,
   notifyTicketUpdatedToRequestor,
   notifyCommentToRequestor,
+  notifyCommentToTechnician,
+  notifyTicketAssignedToTechnician,
 }

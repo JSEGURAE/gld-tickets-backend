@@ -4,7 +4,7 @@ const { v2: cloudinary } = require('cloudinary')
 const { CloudinaryStorage } = require('multer-storage-cloudinary')
 const { PrismaClient } = require('@prisma/client')
 const { authenticate, requireRole } = require('../middleware/auth')
-const { notifyNewTicket, notifyTicketCreatedToRequestor, notifyTicketUpdatedToRequestor, notifyCommentToRequestor } = require('../services/notifications')
+const { notifyNewTicket, notifyTicketCreatedToRequestor, notifyTicketUpdatedToRequestor, notifyTicketAssignedToTechnician } = require('../services/notifications')
 
 const prisma = new PrismaClient()
 
@@ -298,6 +298,11 @@ router.put('/:id', authenticate, async (req, res) => {
     // Notificar al creador si los cambios los hizo otra persona
     if (existing.requestorId !== req.user.id && existing.requestor?.email) {
       notifyTicketUpdatedToRequestor(updated, existing.requestor.email, historyEntries, req.user.name)
+    }
+
+    // Notificar al técnico si le acaban de asignar el ticket
+    if (updateData.assigneeId && updateData.assigneeId !== req.user.id && updated.assignee?.email) {
+      notifyTicketAssignedToTechnician(updated, updated.assignee.email, req.user.name)
     }
 
     res.json(updated)
