@@ -70,6 +70,7 @@ model Ticket {
   subCategoryId  Int?
   attachmentUrl  String?
   attachmentName String?
+  remoteId       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
