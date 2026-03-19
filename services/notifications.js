@@ -152,11 +152,18 @@ function ticketMetaBlock(ticket) {
       </td>
     </tr>
     <tr>
-      <td colspan="3" style="padding:14px 16px">
+      <td colspan="3" style="padding:14px 16px;${ticket.remoteId ? 'border-bottom:1px solid rgba(255,255,255,0.06)' : ''}">
         <span style="color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:4px">Título</span>
         <span style="color:#e2e8f0;font-size:15px;font-weight:600">${ticket.title}</span>
       </td>
     </tr>
+    ${ticket.remoteId ? `
+    <tr>
+      <td colspan="3" style="padding:14px 16px">
+        <span style="color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:4px">Anydesk / TeamViewer</span>
+        <span style="color:#a78bfa;font-size:15px;font-weight:700;font-family:monospace;background:rgba(124,58,237,0.15);padding:4px 12px;border-radius:8px">${ticket.remoteId}</span>
+      </td>
+    </tr>` : ''}
   </table>
   <div style="text-align:center;margin-bottom:8px">
     <a href="${appUrl}/tickets/${ticket.id}"
