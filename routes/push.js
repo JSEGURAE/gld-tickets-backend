@@ -55,7 +55,7 @@ async function notifyTechnicians(payload) {
 
   try {
     const subs = await prisma.pushSubscription.findMany({
-      where: { user: { role: { name: { in: ['TECHNICIAN', 'ADMIN'] } } } },
+      where: { user: { role: { in: ['TECHNICIAN', 'ADMIN'] } } },
     })
 
     const results = await Promise.allSettled(
