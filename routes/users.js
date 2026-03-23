@@ -30,7 +30,7 @@ router.get('/', authenticate, requireRole('ADMIN', 'TECHNICIAN'), async (req, re
 router.get('/technicians', authenticate, async (req, res) => {
   try {
     const technicians = await prisma.user.findMany({
-      where: { role: { name: { in: ['TECHNICIAN', 'ADMIN', 'SUPERVISOR'] } }, active: true },
+      where: { role: { name: { in: ['TECHNICIAN'] } }, active: true },
       select: { id: true, name: true, email: true, role: { select: { name: true } } },
       orderBy: { name: 'asc' },
     })
