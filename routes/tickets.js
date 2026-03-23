@@ -336,8 +336,8 @@ router.post('/:id/supervisors', authenticate, async (req, res) => {
     const canTag = ticket.requestorId === req.user.id || ['TECHNICIAN', 'ADMIN'].includes(req.user.role)
     if (!canTag) return res.status(403).json({ error: 'No tienes permiso para etiquetar supervisores' })
 
-    const supervisor = await prisma.user.findUnique({ where: { id: parseInt(supervisorId) } })
-    if (!supervisor || supervisor.role !== 'SUPERVISOR') {
+    const supervisor = await prisma.user.findUnique({ where: { id: parseInt(supervisorId) }, include: { role: true } })
+    if (!supervisor || supervisor.role?.name !== 'SUPERVISOR') {
       return res.status(400).json({ error: 'El usuario no existe o no es Supervisor' })
     }
 
