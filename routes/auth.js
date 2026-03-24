@@ -157,8 +157,8 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({ message: 'Si el usuario existe, se enviará un enlace de recuperación.' })
   } catch (error) {
-    console.error('Forgot password error:', error)
-    res.status(500).json({ error: 'Error al procesar la solicitud' })
+    console.error('Forgot password error:', error.message, error.code, error.meta)
+    res.status(500).json({ error: 'Error al procesar la solicitud', detail: error.message })
   }
 })
 
