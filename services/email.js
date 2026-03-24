@@ -9,7 +9,19 @@ const PRIORITY_STYLES = {
 }
 
 function createTransporter() {
-  // If no SMTP configured, log warning and skip
+  // Brevo SMTP relay (production / Railway)
+  if (process.env.BREVO_SMTP_USER && process.env.BREVO_API_KEY) {
+    return nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.BREVO_SMTP_USER,
+        pass: process.env.BREVO_API_KEY,
+      },
+    })
+  }
+  // Generic SMTP (local .env fallback)
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || process.env.SMTP_PASS === 'TU_CONTRASENA_AQUI') {
     return null
   }
@@ -121,7 +133,6 @@ async function sendPasswordResetEmail(user, token) {
 
   const appUrl = process.env.APP_URL || 'http://localhost:5173'
   const resetUrl = `${appUrl}/reset-password?token=${token}`
-  const adminEmail = 'jsegura@drmaxsalud.net'
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -156,11 +167,11 @@ async function sendPasswordResetEmail(user, token) {
   try {
     await transporter.sendMail({
       from: `"GLD Service Portal" <${process.env.SMTP_USER}>`,
-      to: adminEmail,
+      to: user.email,
       subject: `[GLD] Recuperación de contraseña — ${user.name}`,
       html,
     })
-    console.log(`🔑 Enlace de recuperación enviado a: ${adminEmail}`)
+    console.log(`🔑 Enlace de recuperación enviado a: ${user.email}`)
   } catch (err) {
     console.error('❌ Error enviando email de recuperación:', err.message)
   }
