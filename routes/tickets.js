@@ -74,9 +74,22 @@ router.get('/', authenticate, async (req, res) => {
 
     const where = {}
     if (!CAN_SEE_ALL.includes(req.user.role)) where.requestorId = req.user.id
-    if (status && VALID_STATUSES.includes(status)) where.status = status
-    if (priority && VALID_PRIORITIES.includes(priority)) where.priority = priority
-    if (assigneeId) where.assigneeId = parseInt(assigneeId)
+
+    if (status) {
+      const statuses = status.split(',').filter(s => VALID_STATUSES.includes(s))
+      if (statuses.length === 1) where.status = statuses[0]
+      else if (statuses.length > 1) where.status = { in: statuses }
+    }
+    if (priority) {
+      const priorities = priority.split(',').filter(p => VALID_PRIORITIES.includes(p))
+      if (priorities.length === 1) where.priority = priorities[0]
+      else if (priorities.length > 1) where.priority = { in: priorities }
+    }
+    if (assigneeId) {
+      const ids = assigneeId.split(',').map(Number).filter(Boolean)
+      if (ids.length === 1) where.assigneeId = ids[0]
+      else if (ids.length > 1) where.assigneeId = { in: ids }
+    }
     if (search) {
       const numericId = parseInt(search.replace('#', ''))
       where.OR = [
