@@ -14,6 +14,7 @@ const notificationRoutes  = require('./routes/notifications')
 const roleRoutes          = require('./routes/roles')
 const sedeRoutes          = require('./routes/sedes')
 const { router: pushRoutes } = require('./routes/push')
+const workflowRoutes      = require('./routes/workflow')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -34,6 +35,7 @@ app.use('/api/notifications', notificationRoutes)
 app.use('/api/roles',         roleRoutes)
 app.use('/api/sedes',         sedeRoutes)
 app.use('/api/push',          pushRoutes)
+app.use('/api/workflow',      workflowRoutes)
 
 // ─── Static files ──────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))

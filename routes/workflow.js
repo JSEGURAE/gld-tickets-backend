@@ -1,0 +1,127 @@
+const router = require('express').Router()
+const { PrismaClient } = require('@prisma/client')
+const { authenticate, requireRole } = require('../middleware/auth')
+
+const prisma = new PrismaClient()
+
+// GET /api/workflow — tickets assigned to me (not completed) + all my tasks
+router.get('/', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const userId = req.user.id
+  try {
+    const [tickets, tasks] = await Promise.all([
+      prisma.ticket.findMany({
+        where: { assigneeId: userId, status: { not: 'COMPLETED' } },
+        select: {
+          id: true, title: true, priority: true, status: true,
+          createdAt: true, updatedAt: true,
+          requestor: { select: { name: true } },
+          category: { select: { name: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }],
+      }),
+      prisma.task.findMany({
+        where: { userId },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      }),
+    ])
+    res.json({ tickets, tasks })
+  } catch (error) {
+    console.error('Workflow GET error:', error)
+    res.status(500).json({ error: 'Error al obtener datos del workflow' })
+  }
+})
+
+// POST /api/workflow/tasks
+router.post('/tasks', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const { title, description, priority, dueDate, ticketId } = req.body
+  if (!title?.trim()) return res.status(400).json({ error: 'El título es requerido' })
+  try {
+    const task = await prisma.task.create({
+      data: {
+        title: title.trim(),
+        description: description?.trim() || null,
+        priority: priority || 'MEDIUM',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        ticketId: ticketId ? parseInt(ticketId) : null,
+        userId: req.user.id,
+      },
+    })
+    res.status(201).json(task)
+  } catch (error) {
+    console.error('Task create error:', error)
+    res.status(500).json({ error: 'Error al crear tarea' })
+  }
+})
+
+// PUT /api/workflow/tasks/:id
+router.put('/tasks/:id', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const taskId = parseInt(req.params.id)
+  const { title, description, status, priority, dueDate, sortOrder } = req.body
+  try {
+    const existing = await prisma.task.findUnique({ where: { id: taskId } })
+    if (!existing) return res.status(404).json({ error: 'Tarea no encontrada' })
+    if (existing.userId !== req.user.id) return res.status(403).json({ error: 'No autorizado' })
+
+    const data = {}
+    if (title !== undefined) data.title = title.trim()
+    if (description !== undefined) data.description = description?.trim() || null
+    if (status !== undefined) {
+      data.status = status
+      data.completedAt = status === 'DONE' ? new Date() : null
+    }
+    if (priority !== undefined) data.priority = priority
+    if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null
+    if (sortOrder !== undefined) data.sortOrder = parseInt(sortOrder)
+
+    const task = await prisma.task.update({ where: { id: taskId }, data })
+    res.json(task)
+  } catch (error) {
+    console.error('Task update error:', error)
+    res.status(500).json({ error: 'Error al actualizar tarea' })
+  }
+})
+
+// DELETE /api/workflow/tasks/:id
+router.delete('/tasks/:id', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const taskId = parseInt(req.params.id)
+  try {
+    const existing = await prisma.task.findUnique({ where: { id: taskId } })
+    if (!existing) return res.status(404).json({ error: 'Tarea no encontrada' })
+    if (existing.userId !== req.user.id) return res.status(403).json({ error: 'No autorizado' })
+    await prisma.task.delete({ where: { id: taskId } })
+    res.json({ message: 'Tarea eliminada' })
+  } catch (error) {
+    console.error('Task delete error:', error)
+    res.status(500).json({ error: 'Error al eliminar tarea' })
+  }
+})
+
+// PATCH /api/workflow/tickets/:id/status — quick status update
+router.patch('/tickets/:id/status', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const ticketId = parseInt(req.params.id)
+  const { status } = req.body
+  const valid = ['NEW', 'IN_REVIEW', 'IN_PROGRESS', 'IN_TESTING', 'COMPLETED']
+  if (!valid.includes(status)) return res.status(400).json({ error: 'Estado inválido' })
+  try {
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
+    if (!ticket) return res.status(404).json({ error: 'Ticket no encontrado' })
+    if (ticket.assigneeId !== req.user.id) return res.status(403).json({ error: 'No autorizado' })
+
+    const [updated] = await Promise.all([
+      prisma.ticket.update({
+        where: { id: ticketId },
+        data: { status },
+        select: { id: true, status: true },
+      }),
+      prisma.history.create({
+        data: { ticketId, userId: req.user.id, field: 'status', oldValue: ticket.status, newValue: status },
+      }),
+    ])
+    res.json(updated)
+  } catch (error) {
+    console.error('Ticket status error:', error)
+    res.status(500).json({ error: 'Error al actualizar estado' })
+  }
+})
+
+module.exports = router

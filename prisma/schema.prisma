@@ -54,6 +54,7 @@ model User {
   history            History[]
   supervisorMentions TicketSupervisor[] @relation("SupervisorMentions")
   pushSubscriptions  PushSubscription[]
+  tasks              Task[]
 
   @@map("usr_users")
 }
@@ -81,6 +82,7 @@ model Ticket {
   comments     Comment[]
   history      History[]
   supervisors  TicketSupervisor[]
+  tasks        Task[]
 
   @@map("tkt_tickets")
 }
@@ -186,4 +188,24 @@ model History {
   user   User   @relation(fields: [userId], references: [id])
 
   @@map("tkt_history")
+}
+
+model Task {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?   @db.Text
+  status      String    @default("PENDING")   // PENDING | IN_PROGRESS | DONE
+  priority    String    @default("MEDIUM")    // LOW | MEDIUM | HIGH | CRITICAL
+  userId      Int
+  ticketId    Int?
+  dueDate     DateTime?
+  completedAt DateTime?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@map("wf_tasks")
 }
