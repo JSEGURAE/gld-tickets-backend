@@ -42,7 +42,7 @@ const upload = multer({
 })
 
 // POST /api/tickets/:id/comments
-router.post('/:id/comments', authenticate, upload.single('attachment'), async (req, res) => {
+router.post('/:id/comments', authenticate, upload.array('attachments', 5), async (req, res) => {
   const ticketId = parseInt(req.params.id)
   const { content } = req.body
 
@@ -64,8 +64,10 @@ router.post('/:id/comments', authenticate, upload.single('attachment'), async (r
       return res.status(403).json({ error: 'No tienes acceso a este ticket' })
     }
 
-    const attachmentUrl  = req.file ? req.file.path : null
-    const attachmentName = req.file ? req.file.originalname : null
+    // Handle multiple attachments
+    const files = req.files || []
+    const attachmentUrl  = files[0]?.path || null
+    const attachmentName = files[0]?.originalname || null
 
     const comment = await prisma.comment.create({
       data: {
@@ -77,6 +79,28 @@ router.post('/:id/comments', authenticate, upload.single('attachment'), async (r
       },
       include: {
         user: { select: { id: true, name: true, role: true } },
+      },
+    })
+
+    // Create CommentAttachment records for all uploaded files
+    if (files.length > 0) {
+      await prisma.commentAttachment.createMany({
+        data: files.map(f => ({
+          commentId: comment.id,
+          url: f.path,
+          name: f.originalname,
+          mimeType: f.mimetype,
+          size: f.size || 0,
+        })),
+      })
+    }
+
+    // Fetch comment with attachments to return
+    const commentWithAttachments = await prisma.comment.findUnique({
+      where: { id: comment.id },
+      include: {
+        user: { select: { id: true, name: true, role: true } },
+        attachments: { orderBy: { createdAt: 'asc' } },
       },
     })
 
@@ -98,7 +122,7 @@ router.post('/:id/comments', authenticate, upload.single('attachment'), async (r
       notifyCommentToTechnician(ticket, ticket.assignee.email, content.trim(), req.user.name)
     }
 
-    res.status(201).json(comment)
+    res.status(201).json(commentWithAttachments)
   } catch (error) {
     console.error('Comment error:', error)
     res.status(500).json({ error: 'Error al agregar comentario' })

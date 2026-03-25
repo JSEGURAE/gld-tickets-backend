@@ -123,7 +123,7 @@ router.get('/:id', authenticate, async (req, res) => {
       includeWithCats = {
         ...ticketDetailInclude,
         comments: {
-          include: { user: { select: { id: true, name: true, role: true } } },
+          include: { user: { select: { id: true, name: true, role: true } }, attachments: { orderBy: { createdAt: 'asc' } } },
           orderBy: { createdAt: 'asc' },
         },
         history: {
@@ -135,7 +135,7 @@ router.get('/:id', authenticate, async (req, res) => {
       includeWithCats = {
         ...ticketInclude,
         comments: {
-          include: { user: { select: { id: true, name: true, role: true } } },
+          include: { user: { select: { id: true, name: true, role: true } }, attachments: { orderBy: { createdAt: 'asc' } } },
           orderBy: { createdAt: 'asc' },
         },
         history: {
