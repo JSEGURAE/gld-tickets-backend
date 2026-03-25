@@ -21,6 +21,7 @@ router.get('/', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, re
       }),
       prisma.task.findMany({
         where: { userId },
+        include: { checklistItems: { orderBy: { sortOrder: 'asc' } } },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       }),
     ])
@@ -93,6 +94,66 @@ router.delete('/tasks/:id', authenticate, requireRole('TECHNICIAN', 'ADMIN'), as
   } catch (error) {
     console.error('Task delete error:', error)
     res.status(500).json({ error: 'Error al eliminar tarea' })
+  }
+})
+
+// POST /api/workflow/tasks/:id/checklist — add item
+router.post('/tasks/:id/checklist', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const taskId = parseInt(req.params.id)
+  const { text } = req.body
+  if (!text?.trim()) return res.status(400).json({ error: 'El texto es requerido' })
+  try {
+    const task = await prisma.task.findUnique({ where: { id: taskId } })
+    if (!task) return res.status(404).json({ error: 'Tarea no encontrada' })
+    if (task.userId !== req.user.id) return res.status(403).json({ error: 'No autorizado' })
+    const last = await prisma.taskChecklistItem.findFirst({ where: { taskId }, orderBy: { sortOrder: 'desc' } })
+    const item = await prisma.taskChecklistItem.create({
+      data: { text: text.trim(), taskId, sortOrder: (last?.sortOrder ?? -1) + 1 },
+    })
+    res.status(201).json(item)
+  } catch (error) {
+    console.error('Checklist create error:', error)
+    res.status(500).json({ error: 'Error al crear ítem' })
+  }
+})
+
+// PUT /api/workflow/tasks/:id/checklist/:itemId — update item (text or done)
+router.put('/tasks/:id/checklist/:itemId', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const itemId = parseInt(req.params.itemId)
+  const { text, done } = req.body
+  try {
+    const item = await prisma.taskChecklistItem.findUnique({
+      where: { id: itemId },
+      include: { task: { select: { userId: true } } },
+    })
+    if (!item) return res.status(404).json({ error: 'Ítem no encontrado' })
+    if (item.task.userId !== req.user.id) return res.status(403).json({ error: 'No autorizado' })
+    const data = {}
+    if (text !== undefined) data.text = text.trim()
+    if (done !== undefined) data.done = Boolean(done)
+    const updated = await prisma.taskChecklistItem.update({ where: { id: itemId }, data })
+    res.json(updated)
+  } catch (error) {
+    console.error('Checklist update error:', error)
+    res.status(500).json({ error: 'Error al actualizar ítem' })
+  }
+})
+
+// DELETE /api/workflow/tasks/:id/checklist/:itemId
+router.delete('/tasks/:id/checklist/:itemId', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
+  const itemId = parseInt(req.params.itemId)
+  try {
+    const item = await prisma.taskChecklistItem.findUnique({
+      where: { id: itemId },
+      include: { task: { select: { userId: true } } },
+    })
+    if (!item) return res.status(404).json({ error: 'Ítem no encontrado' })
+    if (item.task.userId !== req.user.id) return res.status(403).json({ error: 'No autorizado' })
+    await prisma.taskChecklistItem.delete({ where: { id: itemId } })
+    res.json({ message: 'Ítem eliminado' })
+  } catch (error) {
+    console.error('Checklist delete error:', error)
+    res.status(500).json({ error: 'Error al eliminar ítem' })
   }
 })
 
