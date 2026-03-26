@@ -4,19 +4,20 @@ const { authenticate, requireRole } = require('../middleware/auth')
 
 const prisma = new PrismaClient()
 
-// GET /api/workflow — tickets assigned to me (not completed) + all my tasks
+// GET /api/workflow — tickets assigned to me (not completed) + all my tasks + unassigned tickets
 router.get('/', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, res) => {
   const userId = req.user.id
+  const ticketSelect = {
+    id: true, title: true, priority: true, status: true,
+    createdAt: true, updatedAt: true,
+    requestor: { select: { name: true } },
+    category: { select: { name: true } },
+  }
   try {
-    const [tickets, tasks] = await Promise.all([
+    const [tickets, tasks, unassignedTickets] = await Promise.all([
       prisma.ticket.findMany({
         where: { assigneeId: userId, status: { not: 'COMPLETED' } },
-        select: {
-          id: true, title: true, priority: true, status: true,
-          createdAt: true, updatedAt: true,
-          requestor: { select: { name: true } },
-          category: { select: { name: true } },
-        },
+        select: ticketSelect,
         orderBy: [{ createdAt: 'asc' }],
       }),
       prisma.task.findMany({
@@ -24,8 +25,13 @@ router.get('/', authenticate, requireRole('TECHNICIAN', 'ADMIN'), async (req, re
         include: { checklistItems: { orderBy: { sortOrder: 'asc' } } },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       }),
+      prisma.ticket.findMany({
+        where: { assigneeId: null, status: { not: 'COMPLETED' } },
+        select: ticketSelect,
+        orderBy: [{ createdAt: 'desc' }],
+      }),
     ])
-    res.json({ tickets, tasks })
+    res.json({ tickets, tasks, unassignedTickets })
   } catch (error) {
     console.error('Workflow GET error:', error)
     res.status(500).json({ error: 'Error al obtener datos del workflow' })
