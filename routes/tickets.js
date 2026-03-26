@@ -62,7 +62,7 @@ const ticketDetailInclude = {
   subCategory: { select: { id: true, name: true } },
 }
 
-const CAN_SEE_ALL = ['TECHNICIAN', 'ADMIN', 'SUPERVISOR']
+const CAN_SEE_ALL = ['TECHNICIAN', 'ADMIN']
 
 // ─── GET /api/tickets ──────────────────────────────────────────────────────────
 router.get('/', authenticate, async (req, res) => {
@@ -73,7 +73,16 @@ router.get('/', authenticate, async (req, res) => {
     } = req.query
 
     const where = {}
-    if (!CAN_SEE_ALL.includes(req.user.role)) where.requestorId = req.user.id
+    if (req.user.role === 'SUPERVISOR') {
+      where.AND = [{
+        OR: [
+          { requestorId: req.user.id },
+          { supervisors: { some: { supervisorId: req.user.id } } },
+        ],
+      }]
+    } else if (!CAN_SEE_ALL.includes(req.user.role)) {
+      where.requestorId = req.user.id
+    }
 
     if (status) {
       const statuses = status.split(',').filter(s => VALID_STATUSES.includes(s))
@@ -92,11 +101,18 @@ router.get('/', authenticate, async (req, res) => {
     }
     if (search) {
       const numericId = parseInt(search.replace('#', ''))
-      where.OR = [
-        { title: { contains: search } },
-        { description: { contains: search } },
-        ...(isNaN(numericId) ? [] : [{ id: numericId }]),
-      ]
+      const searchClause = {
+        OR: [
+          { title: { contains: search } },
+          { description: { contains: search } },
+          ...(isNaN(numericId) ? [] : [{ id: numericId }]),
+        ],
+      }
+      if (where.AND) {
+        where.AND.push(searchClause)
+      } else {
+        where.OR = searchClause.OR
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit)
@@ -167,7 +183,12 @@ router.get('/:id', authenticate, async (req, res) => {
     })
 
     if (!ticket) return res.status(404).json({ error: 'Ticket no encontrado' })
-    if (!CAN_SEE_ALL.includes(req.user.role) && ticket.requestorId !== req.user.id) {
+    if (req.user.role === 'SUPERVISOR') {
+      const isTagged = ticket.supervisors?.some(s => s.supervisorId === req.user.id)
+      if (!isTagged && ticket.requestorId !== req.user.id) {
+        return res.status(403).json({ error: 'No tienes acceso a este ticket' })
+      }
+    } else if (!CAN_SEE_ALL.includes(req.user.role) && ticket.requestorId !== req.user.id) {
       return res.status(403).json({ error: 'No tienes acceso a este ticket' })
     }
 
