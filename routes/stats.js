@@ -4,10 +4,21 @@ const { authenticate } = require('../middleware/auth')
 
 const prisma = new PrismaClient()
 
+const supervisorWhere = (userId) => ({
+  OR: [
+    { requestorId: userId },
+    { supervisors: { some: { supervisorId: userId } } },
+  ],
+})
+
 // GET /api/stats
 router.get('/', authenticate, async (req, res) => {
   try {
-    const where = req.user.role === 'USER' ? { requestorId: req.user.id } : {}
+    const where = req.user.role === 'SUPERVISOR'
+      ? supervisorWhere(req.user.id)
+      : !['TECHNICIAN', 'ADMIN'].includes(req.user.role)
+        ? { requestorId: req.user.id }
+        : {}
 
     const [total, byStatus, byPriority, recent] = await Promise.all([
       prisma.ticket.count({ where }),
@@ -41,7 +52,11 @@ router.get('/', authenticate, async (req, res) => {
 // Query params: from=YYYY-MM-DD, to=YYYY-MM-DD
 router.get('/monthly', authenticate, async (req, res) => {
   try {
-    const where = req.user.role === 'USER' ? { requestorId: req.user.id } : {}
+    const where = req.user.role === 'SUPERVISOR'
+      ? supervisorWhere(req.user.id)
+      : !['TECHNICIAN', 'ADMIN'].includes(req.user.role)
+        ? { requestorId: req.user.id }
+        : {}
 
     // Resolve display range (used for buckets only)
     const fromStr = req.query.from || (() => {
