@@ -201,7 +201,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // ─── POST /api/tickets ────────────────────────────────────────────────────────
 router.post('/', authenticate, upload.single('image'), async (req, res) => {
-  const { title, description, priority = 'MEDIUM', remoteId } = req.body
+  const { title, description, priority = 'MEDIUM', remoteId, remotePassword } = req.body
 
   if (!title || !description) {
     return res.status(400).json({ error: 'Título y descripción son requeridos' })
@@ -224,6 +224,7 @@ router.post('/', authenticate, upload.single('image'), async (req, res) => {
         attachmentUrl,
         attachmentName,
         remoteId: remoteId ? remoteId.trim() : null,
+        remotePassword: remotePassword ? remotePassword.trim() : null,
       },
       include: ticketInclude,
     })

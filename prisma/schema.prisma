@@ -72,6 +72,7 @@ model Ticket {
   attachmentUrl  String?
   attachmentName String?
   remoteId       String?
+  remotePassword String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
