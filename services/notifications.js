@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client')
-const https = require('https')
+const nodemailer = require('nodemailer')
 
 const prisma = new PrismaClient()
 
@@ -41,46 +41,34 @@ function avatarHtml(name, size = 48) {
   return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:inline-block;text-align:center;line-height:${size}px;color:#fff;font-size:${fontSize}px;font-weight:700;font-family:Arial,sans-serif;vertical-align:middle;flex-shrink:0">${initials}</div>`
 }
 
-// ─── Brevo API ────────────────────────────────────────────────────────────────
+// ─── Gmail (nodemailer) ───────────────────────────────────────────────────────
+
+function createGmailTransporter() {
+  const user = process.env.GMAIL_USER
+  const pass = process.env.GMAIL_APP_PASSWORD
+  if (!user || !pass) { console.log('⚠️  Gmail no configurado.'); return null }
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+  })
+}
 
 async function brevoSend(to, subject, html) {
-  const apiKey = process.env.BREVO_API_KEY
-  if (!apiKey) { console.log('⚠️  Brevo no configurado.'); return }
+  const transporter = createGmailTransporter()
+  if (!transporter) return
 
   const toList = Array.isArray(to) ? to : [to]
-  const body = JSON.stringify({
-    sender: { name: 'GLD Service Portal', email: process.env.BREVO_SENDER_EMAIL || 'js.chatjpt@gmail.com' },
-    to: toList.map(email => ({ email })),
-    subject,
-    htmlContent: html,
-  })
-
-  return new Promise((resolve) => {
-    const req = https.request({
-      hostname: 'api.brevo.com',
-      path: '/v3/smtp/email',
-      method: 'POST',
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    }, (res) => {
-      let data = ''
-      res.on('data', chunk => data += chunk)
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          console.log(`📧 Email enviado a: ${toList.join(', ')}`)
-        } else {
-          console.error(`❌ Brevo error ${res.statusCode}:`, data)
-        }
-        resolve()
-      })
+  try {
+    await transporter.sendMail({
+      from: `"GLD Service Portal" <${process.env.GMAIL_USER}>`,
+      to: toList.join(', '),
+      subject,
+      html,
     })
-    req.on('error', err => { console.error('❌ Brevo request error:', err.message); resolve() })
-    req.write(body)
-    req.end()
-  })
+    console.log(`📧 Email enviado a: ${toList.join(', ')}`)
+  } catch (err) {
+    console.error('❌ Error enviando email:', err.message)
+  }
 }
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
