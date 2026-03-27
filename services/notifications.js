@@ -283,7 +283,6 @@ async function notifyNewTicket(ticket, requestorName) {
 // ─── Password reset ───────────────────────────────────────────────────────────
 
 async function sendPasswordResetEmail(user, token) {
-  if (!process.env.BREVO_API_KEY) { console.log('⚠️  Brevo no configurado.'); return }
   const appUrl   = process.env.APP_URL || 'http://localhost:5173'
   const resetUrl = `${appUrl}/reset-password?token=${token}`
 
