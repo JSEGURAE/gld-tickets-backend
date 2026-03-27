@@ -1,5 +1,4 @@
 const { PrismaClient } = require('@prisma/client')
-const nodemailer = require('nodemailer')
 
 const prisma = new PrismaClient()
 
@@ -41,34 +40,53 @@ function avatarHtml(name, size = 48) {
   return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:inline-block;text-align:center;line-height:${size}px;color:#fff;font-size:${fontSize}px;font-weight:700;font-family:Arial,sans-serif;vertical-align:middle;flex-shrink:0">${initials}</div>`
 }
 
-// ─── Gmail (nodemailer) ───────────────────────────────────────────────────────
-
-function createGmailTransporter() {
-  const user = process.env.GMAIL_USER
-  const pass = process.env.GMAIL_APP_PASSWORD
-  if (!user || !pass) { console.log('⚠️  Gmail no configurado.'); return null }
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass },
-  })
-}
+// ─── Mailjet (HTTP API) ───────────────────────────────────────────────────────
 
 async function brevoSend(to, subject, html) {
-  const transporter = createGmailTransporter()
-  if (!transporter) return
+  const apiKey    = process.env.MAILJET_API_KEY
+  const secretKey = process.env.MAILJET_SECRET_KEY
+  const fromEmail = process.env.MAILJET_FROM || 'js.chatjpt@gmail.com'
+
+  if (!apiKey || !secretKey) { console.log('⚠️  Mailjet no configurado.'); return }
 
   const toList = Array.isArray(to) ? to : [to]
-  try {
-    await transporter.sendMail({
-      from: `"GLD Service Portal" <${process.env.GMAIL_USER}>`,
-      to: toList.join(', '),
-      subject,
-      html,
+  const body   = JSON.stringify({
+    Messages: [{
+      From: { Email: fromEmail, Name: 'GLD Service Portal' },
+      To:   toList.map(email => ({ Email: email })),
+      Subject: subject,
+      HTMLPart: html,
+    }],
+  })
+  const auth = Buffer.from(`${apiKey}:${secretKey}`).toString('base64')
+
+  await new Promise((resolve, reject) => {
+    const https = require('https')
+    const req = https.request({
+      hostname: 'api.mailjet.com',
+      path:     '/v3.1/send',
+      method:   'POST',
+      headers: {
+        Authorization:  `Basic ${auth}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log(`📧 Email enviado a: ${toList.join(', ')}`)
+          resolve()
+        } else {
+          reject(new Error(`Mailjet ${res.statusCode}: ${data}`))
+        }
+      })
     })
-    console.log(`📧 Email enviado a: ${toList.join(', ')}`)
-  } catch (err) {
-    console.error('❌ Error enviando email:', err.message)
-  }
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  }).catch(err => console.error('❌ Error enviando email:', err.message))
 }
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
